@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L Stop, a daily Chicago L station game</title>
+<meta name="description" content="Guess today's Chicago L station in six tries. Free, one a day, with a map at the end.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23c60c30'/%3E%3Ctext x='16' y='23.5' text-anchor='middle' font-family='Arial,Helvetica,sans-serif' font-weight='700' font-size='21' fill='%23ffffff'%3EL%3C/text%3E%3C/svg%3E">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: #1a1a1a; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.4; }
+  main { max-width: 480px; margin: 0 auto; padding: 0 14px 28px; }
+
+  /* The sign: one dark bar, like the name board on an L platform. */
+  .sign { margin: 0 -14px; padding: 14px 16px 12px; background: #111; color: #fff; }
+  .sign-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 { margin: 0; font-family: "Franklin Gothic Medium", "Arial Black", "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 900; font-size: 38px; line-height: 1; letter-spacing: -0.03em; color: #fff; }
+  .day { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.02em; color: #fff; white-space: nowrap; }
+  .lines { display: flex; gap: 5px; margin-top: 10px; }
+  .lines span { width: 14px; height: 14px; border-radius: 2px; }
+  .lines span:nth-child(1) { background: #c60c30; }
+  .lines span:nth-child(2) { background: #00a1de; }
+  .lines span:nth-child(3) { background: #62361b; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+  .lines span:nth-child(4) { background: #009b3a; }
+  .lines span:nth-child(5) { background: #f9461c; }
+  .lines span:nth-child(6) { background: #e27ea6; }
+  .lines span:nth-child(7) { background: #522398; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+  .lines span:nth-child(8) { background: #f9e300; }
+  .pub { font-size: 12px; color: #777; margin: 6px 0 0; }
+
+  /* Prose in a serif, roomy. */
+  .lead, details, .yday, .credits { font-family: Georgia, "Times New Roman", serif; }
+  .lead { font-size: 17px; line-height: 1.55; margin: 20px 0 16px; }
+  details { margin: 0 0 12px; font-size: 17px; line-height: 1.5; color: #333; }
+  details p { margin: 6px 0 0; }
+  summary { cursor: pointer; min-height: 32px; padding: 4px 0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 600; color: #1a1a1a; }
+  .yday { font-size: 16px; font-style: italic; color: #333; margin: 0 0 10px; }
+
+  /* The game: sans, tight. */
+  form { display: flex; gap: 8px; margin: 0 0 6px; }
+  input { flex: 1; min-width: 0; min-height: 48px; font: inherit; font-size: 17px; padding: 11px 12px; border: 2px solid #1a1a1a; border-radius: 8px; color: #1a1a1a; background: #fff; }
+  input:focus { outline: none; border-color: #c60c30; box-shadow: 0 0 0 3px rgba(198,12,48,.3); }
+  button { font: inherit; font-size: 17px; font-weight: 700; padding: 12px 20px; min-height: 48px; border: 0; border-radius: 8px; background: #c60c30; color: #fff; cursor: pointer; }
+  button:focus-visible { outline: 3px solid #1a1a1a; outline-offset: 2px; }
+  button:disabled { background: #999; cursor: default; }
+  .msg { min-height: 20px; font-size: 15px; color: #a40000; margin: 0 0 4px; }
+  ol { list-style: none; margin: 0 0 6px; padding: 0; }
+  li { position: relative; background: #fff; border: 1px solid #ddd; border-left: 5px solid #ccc; border-radius: 10px; padding: 9px 12px; margin: 0 0 6px; }
+  li.right { border-color: #1a7f37; background: #effaf2; }
+  /* One shared line: the left bar takes that line's colour from its dot. */
+  .ln:first-child:has(+ :not(.ln)) .dot::after { content: ""; position: absolute; left: -5px; top: -1px; bottom: -1px; width: 5px; border-radius: 10px 0 0 10px; background: inherit; }
+  .name { font-size: 17px; font-weight: 600; }
+  .info { font-size: 14px; color: #333; display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 3px; }
+  .info > span:last-child { font-weight: 700; color: #1a1a1a; }
+  .ln { white-space: nowrap; font-weight: 400; }
+  .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 5px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.15); }
+  .tries { font-size: 14px; color: #555; margin: 0 0 8px; }
+  .end { border-top: 1px solid #ddd; padding-top: 10px; margin: 0 0 8px; }
+  .end p { margin: 0 0 8px; }
+  .next { font-size: 15px; margin: 0 0 4px; }
+
+  /* The map gets air above it. */
+  #map { margin: 28px 0 6px; padding: 12px; border: 0; border-radius: 12px; background: #f6f5f2; }
+  #map svg { display: block; width: 100%; height: auto; max-height: 78vh; }
+  .cap { font-size: 13px; color: #555; margin: 0 0 8px; }
+  .credits { font-size: 17px; line-height: 1.5; color: #555; margin-top: 28px; padding-top: 14px; border-top: 1px solid #e5e3de; }
+  .credits p { margin: 0 0 8px; }
+  .credits a { color: #1a1a1a; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header class="sign">
+    <div class="sign-top">
+      <h1>L Stop</h1>
+      <p class="day" id="day"></p>
+    </div>
+    <div class="lines" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  </header>
+  <p class="pub">A free daily game by James Robinson. Published October 10, 2026</p>
+  <p class="lead">Guess today's Chicago L station in six tries. The L is Chicago's train system, eight lines named by color. After each guess you see which train lines stop at both stations, and how many stops apart they are.</p>
+  <details>
+    <summary>How it works</summary>
+    <p>Type a station name and press the Guess button. Six tries a day. Each row names the train lines (Red, Blue, Brown and the rest) that stop at both your guess and today's station. It also counts the stops between them, even if you'd have to change trains. You also get which way today's station is from your guess, north, south-east and so on. A new station starts at midnight Chicago time.</p>
+    <p>When the game ends, a Share button copies your result as a row of squares to paste anywhere. A yellow square is a guess that shared a line with today's station and a white one didn't.</p>
+  </details>
+  <p class="yday" id="yday"></p>
+  <form id="f" autocomplete="off">
+    <input id="g" list="names" placeholder="Type a station" aria-label="Station name" autocapitalize="words" spellcheck="false">
+    <button id="b" type="submit">Guess</button>
+  </form>
+  <datalist id="names"></datalist>
+  <p class="msg" id="msg" role="status"></p>
+  <ol id="rows"></ol>
+  <p class="tries" id="tries"></p>
+  <div class="end hidden" id="end">
+    <p><span id="result"></span> <span id="stats"></span></p>
+    <p class="next" id="next"></p>
+    <p id="back"></p>
+    <button id="share" type="button">Share</button>
+    <span id="copied" class="tries"></span>
+  </div>
+  <div id="map"></div>
+  <p class="cap">Each station you guess gets a numbered dot on the map. Today's station is marked too once the game ends.</p>
+  <div class="credits">
+    <p>Station names and lines come from <a href="https://en.wikipedia.org/wiki/List_of_Chicago_%22L%22_stations">Wikipedia's list of Chicago L stations</a>. Not connected with the Chicago Transit Authority.</p>
+    <p>If a station is wrong or a line has changed, email James at james.robinson@griffinley-colony.com. Thanks.</p>
+  </div>
+</main>
+
+<script>
+const STATIONS = [
+{"station":"18th","lines":["Pink"]},
+{"station":"35th–Bronzeville–IIT","lines":["Green"]},
+{"station":"35th/Archer","lines":["Orange"]},
+{"station":"43rd","lines":["Green"]},
+{"station":"47th (Green Line)","lines":["Green"]},
+{"station":"47th (Red Line)","lines":["Red"]},
+{"station":"51st","lines":["Green"]},
+{"station":"54th/Cermak","lines":["Pink"]},
+{"station":"63rd","lines":["Red"]},
+{"station":"69th","lines":["Red"]},
+{"station":"79th","lines":["Red"]},
+{"station":"87th","lines":["Red"]},
+{"station":"95th/Dan Ryan","lines":["Red"]},
+{"station":"Adams/Wabash","lines":["Brown","Green","Orange","Pink","Purple"]},
+{"station":"Addison (Blue Line)","lines":["Blue"]},
+{"station":"Addison (Brown Line)","lines":["Brown"]},
+{"station":"Addison (Red Line)","lines":["Red"]},
+{"station":"Argyle","lines":["Red"]},
+{"station":"Armitage","lines":["Brown","Purple"]},
+{"station":"Ashland (Green and Pink)","lines":["Green","Pink"]},
+{"station":"Ashland/63rd","lines":["Green"]},
+{"station":"Ashland (Orange Line)","lines":["Orange"]},
+{"station":"Austin (Blue Line)","lines":["Blue"]},
+{"station":"Austin (Green Line)","lines":["Green"]},
+{"station":"Belmont (Blue Line)","lines":["Blue"]},
+{"station":"Belmont (North Side Main Line)","lines":["Brown","Purple","Red"]},
+{"station":"Berwyn","lines":["Red"]},
+{"station":"Bryn Mawr","lines":["Red"]},
+{"station":"California (Blue Line)","lines":["Blue"]},
+{"station":"California (Green Line)","lines":["Green"]},
+{"station":"California (Pink Line)","lines":["Pink"]},
+{"station":"Central (Green Line)","lines":["Green"]},
+{"station":"Central (Purple Line)","lines":["Purple"]},
+{"station":"Central Park","lines":["Pink"]},
+{"station":"Cermak–Chinatown","lines":["Red"]},
+{"station":"Cermak–McCormick Place","lines":["Green"]},
+{"station":"Chicago (Blue Line)","lines":["Blue"]},
+{"station":"Chicago (Brown and Purple)","lines":["Brown","Purple"]},
+{"station":"Chicago (Red Line)","lines":["Red"]},
+{"station":"Cicero (Blue Line)","lines":["Blue"]},
+{"station":"Cicero (Green Line)","lines":["Green"]},
+{"station":"Cicero (Pink Line)","lines":["Pink"]},
+{"station":"Clark/Division","lines":["Red"]},
+{"station":"Clark/Lake","lines":["Blue","Brown","Green","Orange","Pink","Purple"]},
+{"station":"Clinton (Blue Line)","lines":["Blue"]},
+{"station":"Clinton (Green and Pink)","lines":["Green","Pink"]},
+{"station":"Conservatory–Central Park Drive","lines":["Green"]},
+{"station":"Cottage Grove","lines":["Green"]},
+{"station":"Cumberland","lines":["Blue"]},
+{"station":"Damen (Blue Line)","lines":["Blue"]},
+{"station":"Damen (Brown Line)","lines":["Brown"]},
+{"station":"Damen (Green Line)","lines":["Green"]},
+{"station":"Damen (Pink Line)","lines":["Pink"]},
+{"station":"Davis","lines":["Purple"]},
+{"station":"Dempster","lines":["Purple"]},
+{"station":"Dempster–Skokie","lines":["Yellow"]},
+{"station":"Diversey","lines":["Brown","Purple"]},
+{"station":"Division","lines":["Blue"]},
+{"station":"Forest Park","lines":["Blue"]},
+{"station":"Foster","lines":["Purple"]},
+{"station":"Francisco","lines":["Brown"]},
+{"station":"Fullerton","lines":["Brown","Purple","Red"]},
+{"station":"Garfield (Green Line)","lines":["Green"]},
+{"station":"Garfield (Red Line)","lines":["Red"]},
+{"station":"Grand (Blue Line)","lines":["Blue"]},
+{"station":"Grand (Red Line)","lines":["Red"]},
+{"station":"Granville","lines":["Red"]},
+{"station":"Halsted (Green Line)","lines":["Green"]},
+{"station":"Halsted (Orange Line)","lines":["Orange"]},
+{"station":"Harlem (Blue Line, Forest Park branch)","lines":["Blue"]},
+{"station":"Harlem (Blue Line, O'Hare branch)","lines":["Blue"]},
+{"station":"Harlem/Lake","lines":["Green"]},
+{"station":"Harold Washington Library–State/Van Buren","lines":["Brown","Orange","Pink","Purple"]},
+{"station":"Harrison","lines":["Red"]},
+{"station":"Howard","lines":["Red","Purple","Yellow"]},
+{"station":"Illinois Medical District","lines":["Blue"]},
+{"station":"Indiana","lines":["Green"]},
+{"station":"Irving Park (Blue Line)","lines":["Blue"]},
+{"station":"Irving Park (Brown Line)","lines":["Brown"]},
+{"station":"Jackson (Blue Line)","lines":["Blue"]},
+{"station":"Jackson (Red Line)","lines":["Red"]},
+{"station":"Jarvis","lines":["Red"]},
+{"station":"Jefferson Park","lines":["Blue"]},
+{"station":"Kedzie (Brown Line)","lines":["Brown"]},
+{"station":"Kedzie (Green Line)","lines":["Green"]},
+{"station":"Kedzie (Orange Line)","lines":["Orange"]},
+{"station":"Kedzie (Pink Line)","lines":["Pink"]},
+{"station":"Kedzie–Homan","lines":["Blue"]},
+{"station":"Kimball","lines":["Brown"]},
+{"station":"King Drive","lines":["Green"]},
+{"station":"Kostner","lines":["Pink"]},
+{"station":"Lake","lines":["Red"]},
+{"station":"Laramie","lines":["Green"]},
+{"station":"LaSalle","lines":["Blue"]},
+{"station":"LaSalle/Van Buren","lines":["Brown","Orange","Pink","Purple"]},
+{"station":"Lawrence","lines":["Red"]},
+{"station":"Linden","lines":["Purple"]},
+{"station":"Logan Square","lines":["Blue"]},
+{"station":"Loyola","lines":["Red"]},
+{"station":"Main","lines":["Purple"]},
+{"station":"Merchandise Mart","lines":["Brown","Purple"]},
+{"station":"Midway","lines":["Orange"]},
+{"station":"Monroe (Blue)","lines":["Blue"]},
+{"station":"Monroe (Red)","lines":["Red"]},
+{"station":"Montrose (Blue)","lines":["Blue"]},
+{"station":"Montrose (Brown)","lines":["Brown"]},
+{"station":"Morgan","lines":["Green","Pink"]},
+{"station":"Morse","lines":["Red"]},
+{"station":"North/Clybourn","lines":["Red"]},
+{"station":"Noyes","lines":["Purple"]},
+{"station":"O'Hare","lines":["Blue"]},
+{"station":"Oak Park (Blue)","lines":["Blue"]},
+{"station":"Oak Park (Green)","lines":["Green"]},
+{"station":"Oakton–Skokie","lines":["Yellow"]},
+{"station":"Paulina","lines":["Brown"]},
+{"station":"Polk","lines":["Pink"]},
+{"station":"Pulaski (Blue)","lines":["Blue"]},
+{"station":"Pulaski (Green)","lines":["Green"]},
+{"station":"Pulaski (Orange)","lines":["Orange"]},
+{"station":"Pulaski (Pink)","lines":["Pink"]},
+{"station":"Quincy","lines":["Brown","Orange","Pink","Purple"]},
+{"station":"Racine (Blue)","lines":["Blue"]},
+{"station":"Ridgeland","lines":["Green"]},
+{"station":"Rockwell","lines":["Brown"]},
+{"station":"Roosevelt","lines":["Green","Orange","Red"]},
+{"station":"Rosemont","lines":["Blue"]},
+{"station":"Sedgwick","lines":["Brown","Purple"]},
+{"station":"Sheridan","lines":["Red"]},
+{"station":"South Boulevard","lines":["Purple"]},
+{"station":"Southport","lines":["Brown"]},
+{"station":"Sox–35th","lines":["Red"]},
+{"station":"State/Lake","lines":["Brown","Green","Orange","Pink","Purple"],"note":"Wikipedia lists Red (at Lake); removed 10/10, Lake is a farecard transfer, not the same station"},
+{"station":"Thorndale","lines":["Red"]},
+{"station":"UIC–Halsted","lines":["Blue"]},
+{"station":"Washington (Blue)","lines":["Blue"],"note":"Wikipedia lists Red (at Lake); removed 10/10, the walkway to Lake is a transfer and counts 0 stops"},
+{"station":"Washington/Wabash","lines":["Brown","Green","Orange","Pink","Purple"]},
+{"station":"Washington/Wells","lines":["Brown","Orange","Pink","Purple"]},
+{"station":"Wellington","lines":["Brown","Purple"]},
+{"station":"Western (Blue, O'Hare branch)","lines":["Blue"]},
+{"station":"Western (Blue, Forest Park branch)","lines":["Blue"]},
+{"station":"Western (Brown)","lines":["Brown"]},
+{"station":"Western (Orange)","lines":["Orange"]},
+{"station":"Western (Pink)","lines":["Pink"]},
+{"station":"Wilson","lines":["Purple","Red"]}
+];
+const COORDS = [
+{"station":"18th","lat":41.85796,"lon":-87.66918},
+{"station":"35th–Bronzeville–IIT","lat":41.83168,"lon":-87.62583},
+{"station":"35th/Archer","lat":41.82935,"lon":-87.68062},
+{"station":"43rd","lat":41.81646,"lon":-87.61902},
+{"station":"47th (Green Line)","lat":41.8094,"lon":-87.61909},
+{"station":"47th (Red Line)","lat":41.81032,"lon":-87.63094},
+{"station":"51st","lat":41.8022,"lon":-87.61903},
+{"station":"54th/Cermak","lat":41.85166,"lon":-87.7596},
+{"station":"63rd","lat":41.78054,"lon":-87.63095},
+{"station":"69th","lat":41.76837,"lon":-87.62572},
+{"station":"79th","lat":41.75042,"lon":-87.62511},
+{"station":"87th","lat":41.73537,"lon":-87.62472},
+{"station":"95th/Dan Ryan","lat":41.7226,"lon":-87.62439},
+{"station":"Adams/Wabash","lat":41.8795,"lon":-87.6261},
+{"station":"Addison (Blue Line)","lat":41.94738,"lon":-87.71906},
+{"station":"Addison (Brown Line)","lat":41.94697,"lon":-87.67473},
+{"station":"Addison (Red Line)","lat":41.94746,"lon":-87.65364},
+{"station":"Argyle","lat":41.97337,"lon":-87.65856},
+{"station":"Armitage","lat":41.91823,"lon":-87.65266},
+{"station":"Ashland (Green and Pink)","lat":41.88528,"lon":-87.66694},
+{"station":"Ashland/63rd","lat":41.77943,"lon":-87.66393},
+{"station":"Ashland (Orange Line)","lat":41.83923,"lon":-87.66532},
+{"station":"Austin (Blue Line)","lat":41.87085,"lon":-87.77681},
+{"station":"Austin (Green Line)","lat":41.88729,"lon":-87.77414},
+{"station":"Belmont (Blue Line)","lat":41.93927,"lon":-87.7125},
+{"station":"Belmont (North Side Main Line)","lat":41.93956,"lon":-87.65335},
+{"station":"Berwyn","lat":41.97783,"lon":-87.65868},
+{"station":"Bryn Mawr","lat":41.98357,"lon":-87.65886},
+{"station":"California (Blue Line)","lat":41.92222,"lon":-87.69722},
+{"station":"California (Green Line)","lat":41.88422,"lon":-87.69623},
+{"station":"California (Pink Line)","lat":41.85411,"lon":-87.69477},
+{"station":"Central (Green Line)","lat":41.88739,"lon":-87.76565},
+{"station":"Central (Purple Line)","lat":42.06395,"lon":-87.68574},
+{"station":"Central Park","lat":41.85384,"lon":-87.71484},
+{"station":"Cermak–Chinatown","lat":41.85321,"lon":-87.63097},
+{"station":"Cermak–McCormick Place","lat":41.85315,"lon":-87.62642},
+{"station":"Chicago (Blue Line)","lat":41.89608,"lon":-87.65521},
+{"station":"Chicago (Brown and Purple)","lat":41.89647,"lon":-87.63583},
+{"station":"Chicago (Red Line)","lat":41.89668,"lon":-87.6282},
+{"station":"Cicero (Blue Line)","lat":41.87157,"lon":-87.74515},
+{"station":"Cicero (Green Line)","lat":41.88652,"lon":-87.7447},
+{"station":"Cicero (Pink Line)","lat":41.85182,"lon":-87.74534},
+{"station":"Clark/Division","lat":41.90392,"lon":-87.63141},
+{"station":"Clark/Lake","lat":41.88577,"lon":-87.63089},
+{"station":"Clinton (Blue Line)","lat":41.87554,"lon":-87.64098},
+{"station":"Clinton (Green and Pink)","lat":41.88568,"lon":-87.64178},
+{"station":"Conservatory–Central Park Drive","lat":41.8849,"lon":-87.71652},
+{"station":"Cottage Grove","lat":41.78031,"lon":-87.60586},
+{"station":"Cumberland","lat":41.98425,"lon":-87.83803},
+{"station":"Damen (Blue Line)","lat":41.90972,"lon":-87.6775},
+{"station":"Damen (Brown Line)","lat":41.9664,"lon":-87.679},
+{"station":"Damen (Green Line)","lat":41.885,"lon":-87.67694},
+{"station":"Damen (Pink Line)","lat":41.85452,"lon":-87.67598},
+{"station":"Davis","lat":42.04771,"lon":-87.68363},
+{"station":"Dempster","lat":42.04187,"lon":-87.68237},
+{"station":"Dempster–Skokie","lat":42.04028,"lon":-87.75222},
+{"station":"Diversey","lat":41.93275,"lon":-87.65316},
+{"station":"Division","lat":41.90336,"lon":-87.6665},
+{"station":"Forest Park","lat":41.87426,"lon":-87.81732},
+{"station":"Foster","lat":42.05414,"lon":-87.6836},
+{"station":"Francisco","lat":41.96616,"lon":-87.7021},
+{"station":"Fullerton","lat":41.92505,"lon":-87.65287},
+{"station":"Garfield (Green Line)","lat":41.79454,"lon":-87.61835},
+{"station":"Garfield (Red Line)","lat":41.79542,"lon":-87.63116},
+{"station":"Grand (Blue Line)","lat":41.89119,"lon":-87.64758},
+{"station":"Grand (Red Line)","lat":41.89167,"lon":-87.62802},
+{"station":"Granville","lat":41.99373,"lon":-87.65915},
+{"station":"Halsted (Green Line)","lat":41.77954,"lon":-87.64468},
+{"station":"Halsted (Orange Line)","lat":41.84678,"lon":-87.64809},
+{"station":"Harlem (Blue Line, Forest Park branch)","lat":41.87349,"lon":-87.80696},
+{"station":"Harlem (Blue Line, O'Hare branch)","lat":41.98246,"lon":-87.80705},
+{"station":"Harlem/Lake","lat":41.88706,"lon":-87.80486},
+{"station":"Harold Washington Library–State/Van Buren","lat":41.87686,"lon":-87.6282},
+{"station":"Harrison","lat":41.87404,"lon":-87.62748},
+{"station":"Howard","lat":42.01916,"lon":-87.67309},
+{"station":"Illinois Medical District","lat":41.87571,"lon":-87.67393},
+{"station":"Indiana","lat":41.82173,"lon":-87.62137},
+{"station":"Irving Park (Blue Line)","lat":41.95296,"lon":-87.72926},
+{"station":"Irving Park (Brown Line)","lat":41.95439,"lon":-87.67496},
+{"station":"Jackson (Blue Line)","lat":41.87818,"lon":-87.6293},
+{"station":"Jackson (Red Line)","lat":41.87815,"lon":-87.6276},
+{"station":"Jarvis","lat":42.01588,"lon":-87.66909},
+{"station":"Jefferson Park","lat":41.97077,"lon":-87.76123},
+{"station":"Kedzie (Brown Line)","lat":41.9661,"lon":-87.70943},
+{"station":"Kedzie (Green Line)","lat":41.88432,"lon":-87.70616},
+{"station":"Kedzie (Orange Line)","lat":41.80424,"lon":-87.70441},
+{"station":"Kedzie (Pink Line)","lat":41.85396,"lon":-87.70541},
+{"station":"Kedzie–Homan","lat":41.87434,"lon":-87.70604},
+{"station":"Kimball","lat":41.96763,"lon":-87.71293},
+{"station":"King Drive","lat":41.78013,"lon":-87.61555},
+{"station":"Kostner","lat":41.85375,"lon":-87.73326},
+{"station":"Lake","lat":41.88481,"lon":-87.62781},
+{"station":"Laramie","lat":41.88716,"lon":-87.75499},
+{"station":"LaSalle","lat":41.87557,"lon":-87.63172},
+{"station":"LaSalle/Van Buren","lat":41.8768,"lon":-87.63174},
+{"station":"Lawrence","lat":41.96914,"lon":-87.65849},
+{"station":"Linden","lat":42.07379,"lon":-87.69056},
+{"station":"Logan Square","lat":41.92973,"lon":-87.70854},
+{"station":"Loyola","lat":42.00108,"lon":-87.66097},
+{"station":"Main","lat":42.03333,"lon":-87.67925},
+{"station":"Merchandise Mart","lat":41.88868,"lon":-87.63397},
+{"station":"Midway","lat":41.78661,"lon":-87.73788},
+{"station":"Monroe (Blue)","lat":41.8807,"lon":-87.62938},
+{"station":"Monroe (Red)","lat":41.88075,"lon":-87.6277},
+{"station":"Montrose (Blue)","lat":41.96154,"lon":-87.74357},
+{"station":"Montrose (Brown)","lat":41.96165,"lon":-87.67516},
+{"station":"Morgan","lat":41.8856,"lon":-87.6522},
+{"station":"Morse","lat":42.00819,"lon":-87.66595},
+{"station":"North/Clybourn","lat":41.91066,"lon":-87.64918},
+{"station":"Noyes","lat":42.05809,"lon":-87.6832},
+{"station":"O'Hare","lat":41.98113,"lon":-87.90088},
+{"station":"Oak Park (Blue)","lat":41.87211,"lon":-87.7916},
+{"station":"Oak Park (Green)","lat":41.88678,"lon":-87.79432},
+{"station":"Oakton–Skokie","lat":42.0273,"lon":-87.7476},
+{"station":"Paulina","lat":41.94372,"lon":-87.67086},
+{"station":"Polk","lat":41.87155,"lon":-87.66953},
+{"station":"Pulaski (Blue)","lat":41.8738,"lon":-87.72566},
+{"station":"Pulaski (Green)","lat":41.88541,"lon":-87.7254},
+{"station":"Pulaski (Orange)","lat":41.79976,"lon":-87.72449},
+{"station":"Pulaski (Pink)","lat":41.85373,"lon":-87.72431},
+{"station":"Quincy","lat":41.87875,"lon":-87.6337},
+{"station":"Racine (Blue)","lat":41.8759,"lon":-87.6596},
+{"station":"Ridgeland","lat":41.88696,"lon":-87.78463},
+{"station":"Rockwell","lat":41.96621,"lon":-87.69472},
+{"station":"Roosevelt","lat":41.8675,"lon":-87.62667},
+{"station":"Rosemont","lat":41.98351,"lon":-87.85939},
+{"station":"Sedgwick","lat":41.9104,"lon":-87.63863},
+{"station":"Sheridan","lat":41.95388,"lon":-87.65527},
+{"station":"South Boulevard","lat":42.02758,"lon":-87.67841},
+{"station":"Southport","lat":41.94383,"lon":-87.66338},
+{"station":"Sox–35th","lat":41.83119,"lon":-87.63064},
+{"station":"State/Lake","lat":41.88574,"lon":-87.62784},
+{"station":"Thorndale","lat":41.99013,"lon":-87.65908},
+{"station":"UIC–Halsted","lat":41.8755,"lon":-87.6497},
+{"station":"Washington (Blue)","lat":41.88316,"lon":-87.62944},
+{"station":"Washington/Wabash","lat":41.8829,"lon":-87.62621},
+{"station":"Washington/Wells","lat":41.88254,"lon":-87.63382},
+{"station":"Wellington","lat":41.9362,"lon":-87.65324},
+{"station":"Western (Blue, O'Hare branch)","lat":41.91616,"lon":-87.68736},
+{"station":"Western (Blue, Forest Park branch)","lat":41.87548,"lon":-87.68844},
+{"station":"Western (Brown)","lat":41.96626,"lon":-87.68845},
+{"station":"Western (Orange)","lat":41.80455,"lon":-87.68402},
+{"station":"Western (Pink)","lat":41.85423,"lon":-87.68513},
+{"station":"Wilson","lat":41.96529,"lon":-87.65797}
+];
+const LINES = {"segments": [
+{"line":"Red","stops":["Howard","Jarvis","Morse","Loyola","Granville","Thorndale","Bryn Mawr","Berwyn","Argyle","Lawrence","Wilson","Sheridan","Addison (Red Line)","Belmont (North Side Main Line)","Fullerton","North/Clybourn","Clark/Division","Chicago (Red Line)","Grand (Red Line)","Lake","Monroe (Red)","Jackson (Red Line)","Harrison","Roosevelt","Cermak–Chinatown","Sox–35th","47th (Red Line)","Garfield (Red Line)","63rd","69th","79th","87th","95th/Dan Ryan"]},
+{"line":"Blue","stops":["O'Hare","Rosemont","Cumberland","Harlem (Blue Line, O'Hare branch)","Jefferson Park","Montrose (Blue)","Irving Park (Blue Line)","Addison (Blue Line)","Belmont (Blue Line)","Logan Square","California (Blue Line)","Western (Blue, O'Hare branch)","Damen (Blue Line)","Division","Chicago (Blue Line)","Grand (Blue Line)","Clark/Lake","Washington (Blue)","Monroe (Blue)","Jackson (Blue Line)","LaSalle","Clinton (Blue Line)","UIC–Halsted","Racine (Blue)","Illinois Medical District","Western (Blue, Forest Park branch)","Kedzie–Homan","Pulaski (Blue)","Cicero (Blue Line)","Austin (Blue Line)","Oak Park (Blue)","Harlem (Blue Line, Forest Park branch)","Forest Park"]},
+{"line":"Brown","stops":["Kimball","Kedzie (Brown Line)","Francisco","Rockwell","Western (Brown)","Damen (Brown Line)","Montrose (Brown)","Irving Park (Brown Line)","Addison (Brown Line)","Paulina","Southport","Belmont (North Side Main Line)","Wellington","Diversey","Fullerton","Armitage","Sedgwick","Chicago (Brown and Purple)","Merchandise Mart"]},
+{"line":"Green","stops":["Harlem/Lake","Oak Park (Green)","Ridgeland","Austin (Green Line)","Central (Green Line)","Laramie","Cicero (Green Line)","Pulaski (Green)","Conservatory–Central Park Drive","Kedzie (Green Line)","California (Green Line)","Damen (Green Line)","Ashland (Green and Pink)","Morgan","Clinton (Green and Pink)","Clark/Lake","State/Lake","Washington/Wabash","Adams/Wabash","Roosevelt","Cermak–McCormick Place","35th–Bronzeville–IIT","Indiana","43rd","47th (Green Line)","51st","Garfield (Green Line)","Halsted (Green Line)","Ashland/63rd"]},
+{"line":"Green","stops":["Harlem/Lake","Oak Park (Green)","Ridgeland","Austin (Green Line)","Central (Green Line)","Laramie","Cicero (Green Line)","Pulaski (Green)","Conservatory–Central Park Drive","Kedzie (Green Line)","California (Green Line)","Damen (Green Line)","Ashland (Green and Pink)","Morgan","Clinton (Green and Pink)","Clark/Lake","State/Lake","Washington/Wabash","Adams/Wabash","Roosevelt","Cermak–McCormick Place","35th–Bronzeville–IIT","Indiana","43rd","47th (Green Line)","51st","Garfield (Green Line)","King Drive","Cottage Grove"]},
+{"line":"Orange","stops":["Midway","Pulaski (Orange)","Kedzie (Orange Line)","Western (Orange)","35th/Archer","Ashland (Orange Line)","Halsted (Orange Line)","Roosevelt","Harold Washington Library–State/Van Buren"]},
+{"line":"Pink","stops":["54th/Cermak","Cicero (Pink Line)","Kostner","Pulaski (Pink)","Central Park","Kedzie (Pink Line)","California (Pink Line)","Western (Pink)","Damen (Pink Line)","18th","Polk","Ashland (Green and Pink)","Morgan","Clinton (Green and Pink)","Clark/Lake"]},
+{"line":"Purple","stops":["Linden","Central (Purple Line)","Noyes","Foster","Davis","Dempster","Main","South Boulevard","Howard"]},
+{"line":"Yellow","stops":["Dempster–Skokie","Oakton–Skokie","Howard"]},
+{"line":"Loop","stops":["Clark/Lake","State/Lake","Washington/Wabash","Adams/Wabash","Harold Washington Library–State/Van Buren","LaSalle/Van Buren","Quincy","Washington/Wells","Clark/Lake"]},
+{"line":"Brown","stops":["Merchandise Mart","Clark/Lake"],"note":"hand fix 10/10: Brown and Purple enter the Loop at Lake and Wells, next to Clark/Lake and Washington/Wells"},
+{"line":"Brown","stops":["Merchandise Mart","Washington/Wells"],"note":"hand fix 10/10, same junction"}
+],
+"transfers": [["Lake","Washington (Blue)"],["Jackson (Red Line)","Jackson (Blue Line)"]],
+"transfers_note": "Checked against Wikipedia 10/10 (sandbox/ltrip/TRANSFERS_SOURCE.md). Lake and State/Lake share only a farecard transfer, so they are not joined.",
+"purple_note": "Purple express (weekday rush hours only) left out of stop counts 10/10 after a cold read; Purple still shows as a line at those stations."
+};
+</script>
+
+<script>
+// Daily L station game, logic only. Data: stations.json (which lines stop where) and lines.json (stop order),
+// both from Wikipedia under CC BY-SA 4.0. No CTA data. The page pastes this file byte for byte.
+"use strict";
+
+function buildGraph(stations, lines) {
+  const linesAt = new Map(stations.map(s => [s.station, s.lines.slice()]));
+  // A free walking transfer joins two stations into one node, so it costs no stops.
+  const parent = new Map(stations.map(s => [s.station, s.station]));
+  const rep = n => { while (parent.get(n) !== n) n = parent.get(n); return n; };
+  for (const [a, b] of lines.transfers || []) {
+    if (parent.has(a) && parent.has(b)) parent.set(rep(b), rep(a));
+  }
+  const adj = new Map(stations.map(s => [rep(s.station), new Set()]));
+  for (const seg of lines.segments) {
+    for (let i = 1; i < seg.stops.length; i++) {
+      const a = seg.stops[i - 1], b = seg.stops[i];
+      if (!parent.has(a) || !parent.has(b)) continue;
+      const ra = rep(a), rb = rep(b);
+      if (ra === rb) continue;
+      adj.get(ra).add(rb);
+      adj.get(rb).add(ra);
+    }
+  }
+  return { linesAt, adj, rep, names: stations.map(s => s.station) };
+}
+
+// Fewest stops between two stations, riding any line. -1 if not connected.
+function stopsAway(g, fromName, toName) {
+  const from = g.rep(fromName), to = g.rep(toName);
+  if (from === to) return 0;
+  const seen = new Set([from]);
+  let frontier = [from], d = 0;
+  while (frontier.length) {
+    d++;
+    const next = [];
+    for (const s of frontier) {
+      for (const n of g.adj.get(s) || []) {
+        if (n === to) return d;
+        if (!seen.has(n)) { seen.add(n); next.push(n); }
+      }
+    }
+    frontier = next;
+  }
+  return -1;
+}
+
+function feedback(g, guess, answer) {
+  const gl = g.linesAt.get(guess) || [], al = g.linesAt.get(answer) || [];
+  return {
+    correct: guess === answer,
+    shared: gl.filter(l => al.includes(l)),
+    stops: stopsAway(g, guess, answer),
+  };
+}
+
+// Same answer for everyone on a date: a fixed shuffle of the station list, one per day from day 1.
+function dayNumber(isoDate, startIso) {
+  const ms = Date.parse(isoDate + "T00:00:00Z") - Date.parse(startIso + "T00:00:00Z");
+  return Math.floor(ms / 86400000) + 1;
+}
+
+function shuffled(names, seed) {
+  const a = names.slice().sort();
+  let x = seed >>> 0;
+  for (let i = a.length - 1; i > 0; i--) {
+    x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+    const j = x % (i + 1);
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+function answerFor(g, isoDate, startIso, seed) {
+  const order = shuffled(g.names, seed);
+  const n = dayNumber(isoDate, startIso);
+  return order[((n - 1) % order.length + order.length) % order.length];
+}
+
+// Share text: one line per guess, a square per shared line count and the stops, no station names.
+function shareText(dayNo, results, maxTries) {
+  const won = results.length && results[results.length - 1].correct;
+  const head = "L Stop #" + dayNo + " " + (won ? results.length : "X") + "/" + maxTries;
+  const rows = results.map(r => r.correct ? "\u{1F7E9} here" : (r.shared.length ? "\u{1F7E8}" : "⬜") + " " + r.stops + (r.stops === 1 ? " stop" : " stops"));
+  return [head].concat(rows).join("\n");
+}
+
+// Map: a flat projection with fixed constants so every point can be checked by hand (EXPECTED-MAP.md).
+// K is cos(41.88 degrees), P the padding. Stations without a lat and lon are left off.
+const MAP_K = 0.7445, MAP_P = 10;
+function mapLayout(coords, W) {
+  const ok = coords.filter(c => c && typeof c.lat === "number" && typeof c.lon === "number" && isFinite(c.lat) && isFinite(c.lon));
+  const pts = new Map();
+  if (!ok.length) return { pts, width: W, height: 2 * MAP_P };
+  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  for (const c of ok) {
+    if (c.lat < minLat) minLat = c.lat;
+    if (c.lat > maxLat) maxLat = c.lat;
+    if (c.lon < minLon) minLon = c.lon;
+    if (c.lon > maxLon) maxLon = c.lon;
+  }
+  const span = (maxLon - minLon) * MAP_K;
+  const s = span > 0 ? (W - 2 * MAP_P) / span : 1;
+  for (const c of ok) pts.set(c.station, { x: MAP_P + (c.lon - minLon) * MAP_K * s, y: MAP_P + (maxLat - c.lat) * s });
+  return { pts, width: W, height: 2 * MAP_P + (maxLat - minLat) * s };
+}
+
+// Compass clue: degrees clockwise from north, from one point to another, on the same flat projection as the map.
+// null if either point has no lat and lon.
+function bearing(from, to) {
+  const ok = c => c && typeof c.lat === "number" && typeof c.lon === "number" && isFinite(c.lat) && isFinite(c.lon);
+  if (!ok(from) || !ok(to)) return null;
+  const dx = (to.lon - from.lon) * MAP_K, dy = to.lat - from.lat;
+  const d = Math.atan2(dx, dy) * 180 / Math.PI;
+  return d < 0 ? d + 360 : d;
+}
+
+// Eight points, each 45 degrees wide and centred on its point, so north runs from 337.5 up to 22.5.
+const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+function compassPoint(deg) {
+  return COMPASS[Math.floor((((deg % 360) + 360) % 360 + 22.5) / 45) % 8];
+}
+
+const MAP_COLORS = { Red: "#c60c30", Blue: "#00a1de", Brown: "#62361b", Green: "#009b3a", Orange: "#f9461c", Pink: "#e27ea6", Purple: "#522398", Yellow: "#f9e300", Loop: "#565a5c" };
+
+// SVG string: every segment as a thin line in its colour, the answer ring once the game is over
+// (drawn under the guesses so a right guess keeps its number), then one numbered dot per guess.
+// Once over, each guess and the answer also get a name label, the station name with its bracketed part removed.
+function mapSvg(layout, lines, guesses, answer, over) {
+  const f = v => String(Math.round(v * 10) / 10);
+  const out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + f(layout.width) + " " + f(layout.height) + '" width="100%" style="overflow:visible" role="img" aria-label="Map of the L with your guesses">'];
+  for (const seg of lines.segments) {
+    const ps = seg.stops.map(n => layout.pts.get(n)).filter(Boolean);
+    if (ps.length < 2) continue;
+    out.push('<polyline fill="none" stroke="' + (MAP_COLORS[seg.line] || "#888888") + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="' + ps.map(p => f(p.x) + "," + f(p.y)).join(" ") + '"/>');
+  }
+  if (over) {
+    const a = layout.pts.get(answer);
+    if (a) out.push('<circle class="answer" cx="' + f(a.x) + '" cy="' + f(a.y) + '" r="12" fill="#ffffff" stroke="#000000" stroke-width="3"/>');
+  }
+  guesses.forEach((n, i) => {
+    const p = layout.pts.get(n);
+    if (!p) return;
+    out.push('<circle class="guess" cx="' + f(p.x) + '" cy="' + f(p.y) + '" r="7.5" fill="#444444" stroke="#ffffff" stroke-width="1.5"/>');
+    out.push('<text x="' + f(p.x) + '" y="' + f(p.y + 3.5) + '" text-anchor="middle" font-size="10" font-weight="700" font-family="sans-serif" fill="#ffffff">' + (i + 1) + "</text>");
+  });
+  if (over) {
+    // Right of the dot, or left of it in the right half so the name stays on the map. A right guess is labelled once, as the answer.
+    const plain = n => n.replace(/\s*\([^)]*\)\s*$/, "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const label = (n, gap, cls) => {
+      const p = layout.pts.get(n);
+      if (!p) return;
+      const left = p.x > layout.width / 2;
+      out.push('<text class="' + cls + '" x="' + f(left ? p.x - gap : p.x + gap) + '" y="' + f(p.y + 4) + '" text-anchor="' + (left ? "end" : "start") + '" font-size="11" font-family="sans-serif" fill="#1a1a1a" stroke="#ffffff" stroke-width="3" paint-order="stroke">' + plain(n) + "</text>");
+    };
+    new Set(guesses.filter(n => n !== answer)).forEach(n => label(n, 10, "label"));
+    label(answer, 15, "label answer-label");
+  }
+  out.push("</svg>");
+  return out.join("");
+}
+
+if (typeof module !== "undefined") module.exports = { buildGraph, stopsAway, feedback, dayNumber, shuffled, answerFor, shareText, mapLayout, mapSvg, MAP_COLORS, bearing, compassPoint };
+</script>
+
+<script>
+(function () {
+  "use strict";
+  var START = "2026-10-10", SEED = 1871, MAX = 6;
+  var PAGE = "griffinley.com/james-robinson/";
+  var COLORS = { Red: "#c60c30", Blue: "#00a1de", Brown: "#62361b", Green: "#009b3a", Orange: "#f9461c", Pink: "#e27ea6", Purple: "#522398", Yellow: "#f9e300" };
+
+  function chicagoParts() {
+    var parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    var o = {};
+    parts.forEach(function (p) { o[p.type] = p.value; });
+    return o;
+  }
+  function chicagoToday() { var p = chicagoParts(); return p.year + "-" + p.month + "-" + p.day; }
+  function dayBefore(iso) { return new Date(Date.parse(iso + "T00:00:00Z") - 86400000).toISOString().slice(0, 10); }
+
+  var g = buildGraph(STATIONS, LINES);
+  var layout = mapLayout(COORDS, 460);
+  var coordOf = {};
+  COORDS.forEach(function (c) { coordOf[c.station] = c; });
+  var today = chicagoToday();
+  var puzzleDate = today < START ? START : today;
+  var dayNo = dayNumber(puzzleDate, START);
+  var answer = answerFor(g, puzzleDate, START, SEED);
+
+  var $ = function (id) { return document.getElementById(id); };
+  var input = $("g"), btn = $("b"), msg = $("msg"), rows = $("rows");
+
+  // Storage
+  var KEY = "lstop.v1";
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+  }
+  function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
+  var store = load();
+  if (store.date !== puzzleDate) { store.date = puzzleDate; store.guesses = []; store.counted = false; }
+  store.streak = store.streak || 0; store.best = store.best || 0; store.played = store.played || 0;
+  save(store);
+
+  // Display names: the data name without its parenthetical. Where two stations share
+  // a plain name, add their lines ("Belmont (Red, Brown and Purple)"), and if that still
+  // collides, the original note ("Western (Blue, O'Hare branch)"). Data names stay internal.
+  var LINE_ORDER = ["Red", "Blue", "Brown", "Green", "Orange", "Pink", "Purple", "Yellow"];
+  function plainOf(n) { return n.replace(/\s*\([^)]*\)\s*$/, ""); }
+  function noteOf(n) { var m = n.match(/\(([^)]*)\)\s*$/); return m ? m[1].replace(/ Line\b/g, "") : ""; }
+  function joinAnd(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
+  function linesLabel(n) {
+    var ls = (g.linesAt.get(n) || []).slice().sort(function (x, y) { return LINE_ORDER.indexOf(x) - LINE_ORDER.indexOf(y); });
+    return joinAnd(ls);
+  }
+  function norm(s) {
+    return String(s).toLowerCase().replace(/[‐-―−-]/g, "-").replace(/\s+/g, " ").trim()
+      .replace(/\s*([-\/])\s*/g, "$1").replace(/\s+station$/, "").trim();
+  }
+  var byPlain = {};
+  g.names.forEach(function (n) { var p = plainOf(n); (byPlain[p] = byPlain[p] || []).push(n); });
+  var displayOf = {}, dataOf = {};
+  Object.keys(byPlain).forEach(function (p) {
+    var group = byPlain[p];
+    if (group.length === 1) { displayOf[group[0]] = p; return; }
+    var count = {};
+    group.forEach(function (n) { var l = linesLabel(n); count[l] = (count[l] || 0) + 1; });
+    group.forEach(function (n) {
+      var l = linesLabel(n);
+      displayOf[n] = p + " (" + (count[l] > 1 ? (noteOf(n) || l) : l) + ")";
+    });
+  });
+  g.names.forEach(function (n) { dataOf[displayOf[n]] = n; });
+  function show(n) { return displayOf[n] || n; }
+
+  var byNorm = {}, byNormPlain = {};
+  g.names.forEach(function (n) {
+    byNorm[norm(n)] = n; byNorm[norm(displayOf[n])] = n;
+    var k = norm(plainOf(n)); (byNormPlain[k] = byNormPlain[k] || []).push(n);
+  });
+
+  var dl = $("names");
+  Object.keys(dataOf).sort().forEach(function (d) {
+    var o = document.createElement("option"); o.value = d; dl.appendChild(o);
+  });
+
+  $("day").textContent = "Day " + dayNo;
+
+  // Yesterday's station from the same schedule, day number minus one. None on day 1.
+  if (dayNo > 1) {
+    var yday = answerFor(g, dayBefore(puzzleDate), START, SEED);
+    var ylines = (g.linesAt.get(yday) || []).length;
+    $("yday").textContent = "Yesterday's station was " + plainOf(yday) + " (" + linesLabel(yday) + (ylines === 1 ? " Line" : " lines") + ").";
+  }
+
+  function results() { return store.guesses.map(function (n) { return feedback(g, n, answer); }); }
+  function isOver() {
+    var r = results();
+    return r.length >= MAX || (r.length && r[r.length - 1].correct);
+  }
+
+  function renderMap() {
+    $("map").innerHTML = mapSvg(layout, LINES, store.guesses, answer, !!isOver());
+  }
+
+  function addRow(name, fb) {
+    var li = document.createElement("li");
+    if (fb.correct) li.className = "right";
+    var nm = document.createElement("div"); nm.className = "name"; nm.textContent = show(name); li.appendChild(nm);
+    var info = document.createElement("div"); info.className = "info";
+    if (fb.correct) {
+      var s = document.createElement("span"); s.textContent = "That's it."; info.appendChild(s);
+    } else {
+      if (fb.shared.length) {
+        fb.shared.forEach(function (l) {
+          var sp = document.createElement("span"); sp.className = "ln";
+          var d = document.createElement("span"); d.className = "dot"; d.style.background = COLORS[l] || "#888";
+          sp.appendChild(d); sp.appendChild(document.createTextNode(l));
+          info.appendChild(sp);
+        });
+      } else {
+        var none = document.createElement("span"); none.textContent = "No shared lines"; info.appendChild(none);
+      }
+      var st = document.createElement("span");
+      var deg = fb.stops > 0 ? bearing(coordOf[name], coordOf[answer]) : null;
+      st.textContent = fb.stops < 0 ? "Not connected"
+        : fb.stops === 0 ? "Wrong station, but a free walkway connects them"
+        : fb.stops + (fb.stops === 1 ? " stop away" : " stops away") + (deg === null ? "" : ", " + compassPoint(deg));
+      info.appendChild(st);
+    }
+    li.appendChild(info);
+    rows.appendChild(li);
+  }
+
+  function shownStreak() {
+    if (!store.lastWin) return 0;
+    return (store.lastWin === puzzleDate || store.lastWin === dayBefore(puzzleDate)) ? store.streak : 0;
+  }
+
+  function renderStats() {
+    $("stats").textContent = "Streak " + shownStreak() + ". Best " + store.best + ". Played " + store.played + ".";
+  }
+
+  function renderEnd() {
+    var r = results();
+    var over = isOver();
+    $("tries").textContent = over ? "" : (MAX - r.length) + (MAX - r.length === 1 ? " try left." : " tries left.");
+    input.disabled = over; btn.disabled = over;
+    if (!over) return;
+    var won = r[r.length - 1].correct;
+    $("result").textContent = won
+      ? "You got it in " + r.length + ". Today's station is " + show(answer) + "."
+      : "Today's station was " + show(answer) + ".";
+    $("back").textContent = "A new station starts at midnight Chicago time. Come back tomorrow.";
+    $("end").classList.remove("hidden");
+  }
+
+  function finish() {
+    if (store.counted) return;
+    var r = results();
+    var won = r[r.length - 1].correct;
+    store.played += 1;
+    if (won) {
+      store.streak = (store.lastWin === dayBefore(puzzleDate)) ? store.streak + 1 : 1;
+      store.lastWin = puzzleDate;
+      if (store.streak > store.best) store.best = store.streak;
+    } else {
+      store.streak = 0;
+    }
+    store.counted = true;
+    save(store);
+  }
+
+  $("f").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (isOver()) return;
+    var raw = input.value.trim();
+    if (!raw) return;
+    var key = norm(raw);
+    var name = byNorm[key];
+    if (!name) {
+      var hits = byNormPlain[key] || [];
+      if (hits.length === 1) name = hits[0];
+      else if (hits.length > 1) { msg.textContent = "Which one? " + hits.map(show).join(" or ") + "?"; return; }
+    }
+    if (!name) { msg.textContent = "That name isn't on the list. Pick one from the suggestions."; return; }
+    if (store.guesses.indexOf(name) !== -1) { msg.textContent = "You already tried that one."; return; }
+    msg.textContent = "";
+    store.guesses.push(name);
+    save(store);
+    addRow(name, feedback(g, name, answer));
+    input.value = "";
+    if (isOver()) finish();
+    renderEnd();
+    renderStats();
+    renderMap();
+  });
+
+  function copy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () { return fallback(text); });
+    }
+    return Promise.resolve(fallback(text));
+  }
+  function fallback(text) {
+    var t = document.createElement("textarea");
+    t.value = text; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+    document.body.appendChild(t); t.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(t);
+  }
+  $("share").addEventListener("click", function () {
+    var text = shareText(dayNo, results(), MAX) + "\n" + PAGE;
+    copy(text).then(function () { $("copied").textContent = " Copied."; });
+  });
+
+  function tick() {
+    if (chicagoToday() < START) {
+      $("next").textContent = "Daily stations start October 10.";
+      return;
+    }
+    var p = chicagoParts();
+    var left = 86400 - (Number(p.hour) * 3600 + Number(p.minute) * 60 + Number(p.second));
+    var h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60);
+    $("next").textContent = "Next station in " + String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+    if (chicagoToday() !== today && chicagoToday() >= START) location.reload();
+  }
+
+  store.guesses.forEach(function (n) { addRow(n, feedback(g, n, answer)); });
+  if (isOver()) finish();
+  renderEnd();
+  renderStats();
+  renderMap();
+  tick();
+  setInterval(tick, 20000);
+})();
+</script>
+</body>
+</html>
